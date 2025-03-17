@@ -307,11 +307,31 @@ impl EthSenderDal<'_, '_> {
         raw_signed_tx: &[u8],
         sent_at_block: u32,
     ) -> anyhow::Result<Option<u32>> {
+        // Add safety caps to prevent u64 to i64 conversion errors
+        let safe_base_fee = std::cmp::min(base_fee_per_gas, i64::MAX as u64);
+        let safe_priority_fee = std::cmp::min(priority_fee_per_gas, i64::MAX as u64);
+        
+        if base_fee_per_gas != safe_base_fee || priority_fee_per_gas != safe_priority_fee {
+            tracing::warn!(
+                "Gas fee values exceed i64::MAX and have been capped: base_fee_per_gas: {} -> {}, priority_fee_per_gas: {} -> {}",
+                base_fee_per_gas, safe_base_fee, priority_fee_per_gas, safe_priority_fee
+            );
+        }
+        
         let priority_fee_per_gas =
-            i64::try_from(priority_fee_per_gas).context("Can't convert u64 to i64")?;
+            i64::try_from(safe_priority_fee).context("Can't convert u64 to i64")?;
         let base_fee_per_gas =
-            i64::try_from(base_fee_per_gas).context("Can't convert u64 to i64")?;
+            i64::try_from(safe_base_fee).context("Can't convert u64 to i64")?;
         let tx_hash = format!("{:#x}", tx_hash);
+        
+        let safe_blob_base_fee = blob_base_fee_per_gas.map(|fee| std::cmp::min(fee, i64::MAX as u64));
+        
+        if blob_base_fee_per_gas != safe_blob_base_fee {
+            tracing::warn!(
+                "Blob gas fee value exceeds i64::MAX and has been capped: blob_base_fee_per_gas: {:?} -> {:?}",
+                blob_base_fee_per_gas, safe_blob_base_fee
+            );
+        }
 
         Ok(sqlx::query!(
             r#"
@@ -339,7 +359,7 @@ impl EthSenderDal<'_, '_> {
             priority_fee_per_gas,
             tx_hash,
             raw_signed_tx,
-            blob_base_fee_per_gas.map(|v| v as i64),
+            safe_blob_base_fee.map(|v| v as i64),
             sent_at_block as i32
         )
         .fetch_optional(self.storage.conn())

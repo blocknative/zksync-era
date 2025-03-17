@@ -356,8 +356,28 @@ impl TxParamsProvider for GasAdjuster {
     // enough to "almost be certain" that the transaction gets included. To never have to double
     // the gas prices as then we have very little control how much we pay in the end. This strategy
     // works as no matter if we double or triple such price, we pay the same block base fees.
-    fn get_blob_tx_base_fee(&self) -> u64 {
-        self.base_fee_statistics.last_added_value() * 2
+    pub fn get_blob_tx_base_fee(&self) -> u64 {
+        let median = self.base_fee_statistics.median();
+        tracing::info!(
+            "PRICE_DEBUG: Base fee statistics median: {}, raw L1 values in statistics: {:?}",
+            median,
+            self.base_fee_statistics.values()
+        );
+
+        let a = self.config.pricing_formula_parameter_a;
+        let internal_l1_pricing_multiplier = self.config.internal_l1_pricing_multiplier;
+        let result = (median as f64 * a * internal_l1_pricing_multiplier) as u64;
+
+        tracing::info!(
+            "PRICE_DEBUG: get_blob_tx_base_fee calculation: median {} * parameter_a {} * internal_multiplier {} = {} (exceeds i64::MAX: {})",
+            median,
+            a,
+            internal_l1_pricing_multiplier,
+            result,
+            result > i64::MAX as u64
+        );
+
+        result
     }
 
     fn get_blob_tx_blob_base_fee(&self) -> u64 {
@@ -456,5 +476,9 @@ impl<T: Ord + Copy + Default> GasStatistics<T> {
 
     pub fn last_processed_block(&self) -> usize {
         self.0.read().unwrap().last_processed_block
+    }
+
+    pub fn values(&self) -> Vec<T> {
+        self.0.read().unwrap().samples.iter().cloned().collect()
     }
 }

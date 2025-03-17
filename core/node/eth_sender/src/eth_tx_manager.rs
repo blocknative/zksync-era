@@ -121,11 +121,29 @@ impl EthTxManager {
         time_in_mempool_in_l1_blocks: u32,
         current_block: L1BlockNumber,
     ) -> Result<H256, EthSenderError> {
+        tracing::info!(
+            "PRICE_DEBUG: Starting send_eth_tx for tx {} with time_in_mempool: {} blocks",
+            tx.id,
+            time_in_mempool_in_l1_blocks
+        );
+
         let previous_sent_tx = storage
             .eth_sender_dal()
             .get_last_sent_eth_tx(tx.id)
             .await
             .unwrap();
+
+        if let Some(prev_tx) = &previous_sent_tx {
+            tracing::info!(
+                "PRICE_DEBUG: Previous transaction found - id: {}, base_fee: {}, priority_fee: {}, sent at: {}",
+                prev_tx.id,
+                prev_tx.base_fee_per_gas,
+                prev_tx.priority_fee_per_gas,
+                prev_tx.sent_at
+            );
+        } else {
+            tracing::info!("PRICE_DEBUG: No previous transaction found for tx_id: {}", tx.id);
+        }
 
         let EthFees {
             base_fee_per_gas,
@@ -137,6 +155,15 @@ impl EthTxManager {
             time_in_mempool_in_l1_blocks,
             self.operator_type(tx),
         )?;
+
+        tracing::info!(
+            "PRICE_DEBUG: Final calculated fees for tx {}: base_fee: {} (exceeds i64::MAX: {}), priority_fee: {}, blob_fee: {:?}",
+            tx.id,
+            base_fee_per_gas,
+            base_fee_per_gas > i64::MAX as u64,
+            priority_fee_per_gas,
+            blob_base_fee_per_gas
+        );
 
         let operator_type = self.operator_type(tx);
 

@@ -49,6 +49,11 @@ impl GasAdjusterFeesOracle {
         previous_sent_tx: &Option<TxHistory>,
     ) -> Result<EthFees, EthSenderError> {
         let base_fee_per_gas = self.gas_adjuster.get_blob_tx_base_fee();
+        tracing::info!(
+            "PRICE_DEBUG: Initial blob_tx_base_fee from gas_adjuster: {}, exceeds i64::MAX: {}",
+            base_fee_per_gas,
+            base_fee_per_gas > i64::MAX as u64
+        );
         self.assert_fee_is_not_zero(base_fee_per_gas, "base");
         let priority_fee_per_gas = self.gas_adjuster.get_blob_tx_priority_fee();
         let blob_base_fee_per_gas = self.gas_adjuster.get_blob_tx_blob_base_fee();
@@ -57,19 +62,38 @@ impl GasAdjusterFeesOracle {
 
         if let Some(previous_sent_tx) = previous_sent_tx {
             // for blob transactions on re-sending need to double all gas prices
+            let new_base_fee = max(previous_sent_tx.base_fee_per_gas * 2, base_fee_per_gas);
+            let new_priority_fee = max(
+                previous_sent_tx.priority_fee_per_gas * 2,
+                priority_fee_per_gas,
+            );
+            let new_blob_fee = max(
+                previous_sent_tx.blob_base_fee_per_gas.map(|v| v * 2),
+                blob_base_fee_per_gas,
+            );
+
+            tracing::info!(
+                "PRICE_DEBUG: Resending transaction with doubled fees - Previous base_fee: {}, doubled: {}, final chosen: {} (exceeds i64::MAX: {})",
+                previous_sent_tx.base_fee_per_gas,
+                previous_sent_tx.base_fee_per_gas * 2,
+                new_base_fee,
+                new_base_fee > i64::MAX as u64
+            );
+
             return Ok(EthFees {
-                base_fee_per_gas: max(previous_sent_tx.base_fee_per_gas * 2, base_fee_per_gas),
-                priority_fee_per_gas: max(
-                    previous_sent_tx.priority_fee_per_gas * 2,
-                    priority_fee_per_gas,
-                ),
-                blob_base_fee_per_gas: max(
-                    previous_sent_tx.blob_base_fee_per_gas.map(|v| v * 2),
-                    blob_base_fee_per_gas,
-                ),
+                base_fee_per_gas: new_base_fee,
+                priority_fee_per_gas: new_priority_fee,
+                blob_base_fee_per_gas: new_blob_fee,
                 pubdata_price: None,
             });
         }
+
+        tracing::info!(
+            "PRICE_DEBUG: Using initial fees (no previous tx) - base_fee: {} (exceeds i64::MAX: {})",
+            base_fee_per_gas,
+            base_fee_per_gas > i64::MAX as u64
+        );
+
         Ok(EthFees {
             base_fee_per_gas,
             priority_fee_per_gas,
