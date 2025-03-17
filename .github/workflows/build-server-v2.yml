@@ -99,6 +99,18 @@ jobs:
         with:
           toolchain: nightly-2024-08-01
 
+      - name: Cache Rust dependencies
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            ./core/target
+          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+
       - name: Install foundry-zksync
         if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         run: |
