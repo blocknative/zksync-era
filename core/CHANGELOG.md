@@ -1,5 +1,31 @@
 # Changelog
 
+## [27.0.0](https://github.com/matter-labs/zksync-era/compare/core-v26.7.0...core-v27.0.0) (2025-03-17)
+
+
+### ⚠ BREAKING CHANGES
+
+* V27 update ([#3580](https://github.com/matter-labs/zksync-era/issues/3580))
+
+### Features
+
+* **eigenda:** EigenDA M0 ([#3650](https://github.com/matter-labs/zksync-era/issues/3650)) ([2a3cae9](https://github.com/matter-labs/zksync-era/commit/2a3cae96374c2bd15a0d8c23770a79ad6d82c8b9))
+* **eth-watch:** split heavy get logs requests if 503 ([#3706](https://github.com/matter-labs/zksync-era/issues/3706)) ([406a3ff](https://github.com/matter-labs/zksync-era/commit/406a3ff096127b0b18181f5aabc70518664afa77))
+* **gateway:** Requirement to stop L1-&gt;L2 transactions before v26 upgrade ([#3707](https://github.com/matter-labs/zksync-era/issues/3707)) ([0a095b7](https://github.com/matter-labs/zksync-era/commit/0a095b704c513dc72dbb417ba2731b09e9a2dd5d))
+* Use JSON-RPC for core &lt;&gt; prover interaction ([#3626](https://github.com/matter-labs/zksync-era/issues/3626)) ([4e74730](https://github.com/matter-labs/zksync-era/commit/4e7473011e6551bbeb3e7862872e99721aeba232))
+* V27 update ([#3580](https://github.com/matter-labs/zksync-era/issues/3580)) ([9e18550](https://github.com/matter-labs/zksync-era/commit/9e1855050e3457ecef2b45a75e993dcdc2de370a))
+
+
+### Bug Fixes
+
+* **contract-verifier:** Correctly process partial verification for EVM contracts ([#3688](https://github.com/matter-labs/zksync-era/issues/3688)) ([8292234](https://github.com/matter-labs/zksync-era/commit/82922344c689a5e299ac27625f9e8490b57810ea))
+* Serialization issues ([#3589](https://github.com/matter-labs/zksync-era/issues/3589)) ([606d5af](https://github.com/matter-labs/zksync-era/commit/606d5af4641f8940f075dda091fb49e25a642ab9))
+
+
+### Performance Improvements
+
+* **zkos:** Choose optimal amortization radix for ZK OS Merkle tree ([#3685](https://github.com/matter-labs/zksync-era/issues/3685)) ([fc1e230](https://github.com/matter-labs/zksync-era/commit/fc1e230a6a9dc0ffce5cc53b5b4a1caf64644d90))
+
 ## [26.7.0](https://github.com/matter-labs/zksync-era/compare/core-v26.6.0...core-v26.7.0) (2025-03-06)
 
 
