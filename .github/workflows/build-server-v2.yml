@@ -12,18 +12,83 @@ on:
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/server-v2
+  CACHE_KEY: ${{ github.repository }}-server-v2-${{ github.sha }}
 
 jobs:
+  prepare-contracts:
+    name: Prepare contracts
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: "recursive"
+
+      - name: Prepare ENV
+        shell: bash
+        run: |
+          echo ZKSYNC_HOME=$(pwd) >> $GITHUB_ENV
+          echo CI=1 >> $GITHUB_ENV
+          echo $(pwd)/bin >> $GITHUB_PATH
+          echo $HOME/.local/bin >> $GITHUB_PATH
+          echo CI=1 >> .env
+          echo IN_DOCKER=1 >> .env
+
+      - name: Download contracts
+        shell: bash
+        run: |
+          commit_sha=$(git submodule status contracts | awk '{print $1}' | tr -d '-')
+          page=1
+          filtered_tag=""
+          while [ true ]; do
+            echo "Page: $page"
+            tags=$(run_retried curl -s -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" -H "Accept: application/vnd.github+json" \
+              "https://api.github.com/repos/matter-labs/era-contracts/tags?per_page=100&page=${page}" | jq .)
+            if [ $(jq length <<<"$tags") -eq 0 ]; then
+              echo "No tag found on all pages."
+              echo "BUILD_CONTRACTS=true" >> "$GITHUB_ENV"
+              exit 0
+            fi
+            filtered_tag=$(jq -r --arg commit_sha "$commit_sha" 'map(select(.commit.sha == $commit_sha)) | .[].name' <<<"$tags")
+            if [[ ! -z "$filtered_tag" ]]; then
+              echo "BUILD_CONTRACTS=false" >> "$GITHUB_ENV"
+              break
+            fi
+            ((page++))
+          done
+          echo "Contracts tag is: ${filtered_tag}"
+          mkdir -p ./contracts
+          run_retried curl -s -LO https://github.com/matter-labs/era-contracts/releases/download/${filtered_tag}/l1-contracts.tar.gz
+          run_retried curl -s -LO https://github.com/matter-labs/era-contracts/releases/download/${filtered_tag}/l2-contracts.tar.gz
+          run_retried curl -s -LO https://github.com/matter-labs/era-contracts/releases/download/${filtered_tag}/system-contracts.tar.gz
+          tar -C ./contracts -zxf l1-contracts.tar.gz
+          tar -C ./contracts -zxf l2-contracts.tar.gz
+          tar -C ./contracts -zxf system-contracts.tar.gz
+
+      - name: Upload contracts
+        uses: actions/upload-artifact@v4
+        with:
+          name: contracts
+          path: |
+            ./contracts
+
   build-and-push:
     permissions:
       contents: read
       packages: write
+    needs: prepare-contracts
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v4
         with:
           submodules: "recursive"
+
+      - name: Download contracts
+        uses: actions/download-artifact@v4
+        with:
+          name: contracts
+          path: |
+            ./contracts
 
       - name: Set IMAGE_TAG
         run: |
@@ -46,6 +111,14 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ env.CACHE_KEY }}
+          restore-keys: |
+            ${{ github.repository }}-server-v2-
+
       - name: Extract metadata (tags, labels) for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -64,8 +137,15 @@ jobs:
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
+          cache-from: type=local,src=/tmp/.buildx-cache
+          cache-to: type=local,dest=/tmp/.buildx-cache-new
           build-args: |
             SCCACHE_GCS_BUCKET=matterlabs-infra-sccache-storage
             SCCACHE_GCS_SERVICE_ACCOUNT=gha-ci-runners@matterlabs-infra.iam.gserviceaccount.com
             SCCACHE_GCS_RW_MODE=READ_WRITE
             RUSTC_WRAPPER=sccache
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
