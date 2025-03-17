@@ -135,11 +135,11 @@ impl EthTxManager {
 
         if let Some(prev_tx) = &previous_sent_tx {
             tracing::info!(
-                "PRICE_DEBUG: Previous transaction found - id: {}, base_fee: {}, priority_fee: {}, sent at: {}",
+                "PRICE_DEBUG: Previous transaction found - id: {}, base_fee: {}, priority_fee: {}, sent at block: {:?}",
                 prev_tx.id,
                 prev_tx.base_fee_per_gas,
                 prev_tx.priority_fee_per_gas,
-                prev_tx.sent_at
+                prev_tx.sent_at_block
             );
         } else {
             tracing::info!("PRICE_DEBUG: No previous transaction found for tx_id: {}", tx.id);
