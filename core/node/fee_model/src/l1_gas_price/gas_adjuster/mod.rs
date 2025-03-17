@@ -356,7 +356,7 @@ impl TxParamsProvider for GasAdjuster {
     // enough to "almost be certain" that the transaction gets included. To never have to double
     // the gas prices as then we have very little control how much we pay in the end. This strategy
     // works as no matter if we double or triple such price, we pay the same block base fees.
-    pub fn get_blob_tx_base_fee(&self) -> u64 {
+    fn get_blob_tx_base_fee(&self) -> u64 {
         let median = self.base_fee_statistics.median();
         tracing::info!(
             "PRICE_DEBUG: Base fee statistics median: {}, raw L1 values in statistics: {:?}",
