@@ -13,6 +13,7 @@ env:
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}/server-v2
   CACHE_KEY: ${{ github.repository }}-server-v2-${{ github.sha }}
+  CONTRACTS_CACHE_KEY: ${{ github.repository }}-contracts-${{ github.sha }}
 
 jobs:
   prepare-contracts:
@@ -22,6 +23,16 @@ jobs:
       - uses: actions/checkout@v4
         with:
           submodules: "recursive"
+
+      - name: Cache contracts
+        uses: actions/cache@v4
+        with:
+          path: |
+            ./contracts
+            ./hardhat-nodejs/compilers-v2
+          key: ${{ env.CONTRACTS_CACHE_KEY }}
+          restore-keys: |
+            ${{ github.repository }}-contracts-
 
       - name: Prepare ENV
         shell: bash
@@ -34,6 +45,7 @@ jobs:
           echo IN_DOCKER=1 >> .env
 
       - name: Download contracts
+        if: steps.cache-contracts.outputs.cache-hit != 'true'
         shell: bash
         run: |
           commit_sha=$(git submodule status contracts | awk '{print $1}' | tr -d '-')
@@ -65,30 +77,30 @@ jobs:
           tar -C ./contracts -zxf system-contracts.tar.gz
 
       - name: Install Apt dependencies
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         shell: bash
         run: |
           sudo apt-get update && sudo apt-get install -y libssl-dev pkg-config
 
       - name: Install Node
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
 
       - name: Install Yarn
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         run: npm install -g yarn
 
       - name: Setup rust
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         uses: actions-rust-lang/setup-rust-toolchain@v1
         with:
           toolchain: nightly-2024-08-01
 
       - name: Install foundry-zksync
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         run: |
           mkdir ./foundry-zksync
           curl -LO https://github.com/matter-labs/foundry-zksync/releases/download/nightly-27360d4c8d12beddbb730dae07ad33a206b38f4b/foundry_nightly_linux_amd64.tar.gz
@@ -97,7 +109,7 @@ jobs:
           echo "$PWD/foundry-zksync" >> $GITHUB_PATH
 
       - name: Pre-download compilers
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         shell: bash
         run: |
           # Download needed versions of vyper compiler
@@ -115,13 +127,13 @@ jobs:
           done
 
       - name: Install zkstack
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         run: |
           ./zkstack_cli/zkstackup/install --path ./zkstack_cli/zkstackup/zkstackup
           zkstackup --local || true
 
       - name: Build contracts
-        if: env.BUILD_CONTRACTS == 'true'
+        if: steps.cache-contracts.outputs.cache-hit != 'true' && env.BUILD_CONTRACTS == 'true'
         shell: bash
         run: |
           cp etc/tokens/{test,localhost}.json
@@ -203,10 +215,8 @@ jobs:
           cache-from: type=local,src=/tmp/.buildx-cache
           cache-to: type=local,dest=/tmp/.buildx-cache-new
           build-args: |
-            SCCACHE_GCS_BUCKET=matterlabs-infra-sccache-storage
-            SCCACHE_GCS_SERVICE_ACCOUNT=gha-ci-runners@matterlabs-infra.iam.gserviceaccount.com
-            SCCACHE_GCS_RW_MODE=READ_WRITE
-            RUSTC_WRAPPER=sccache
+            RUSTC_WRAPPER=
+            CARGO_NET_GIT_FETCH_WITH_CLI=true
 
       - name: Move cache
         run: |
